@@ -1,9 +1,11 @@
 ---
 name: skills-sync-workflow
-description: Manage Tim's split skills-sync workflow: use the public sync engine repo with private or team skills hubs, check sync status, install skills to AI tools, import target edits back to the right hub, and keep the workflow skill itself synchronized.
+description: Manage Tim's skills-sync-workflow skill for the split skills-sync workflow: use the public sync engine repo with private or team skills hubs, check sync status, install skills to AI tools, import target edits back to the right hub, and keep the workflow skill itself synchronized.
 ---
 
-# Skills Sync Workflow
+# Skills Sync Workflow Skill
+
+Alias: `skills-sync-workflow`
 
 ## Repository Model
 
