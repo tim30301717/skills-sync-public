@@ -6,6 +6,7 @@ profiles:
   - claude-user
   # - agents-user
   # - gemini-user
+  # - hermes-user
 
   # Project-scoped examples:
   # - claude-project

@@ -28,6 +28,11 @@ gemini-user:
   install_root: "${HOME}/.gemini/skills"
   variant: default
 
+hermes-user:
+  # Hermes Agent stores user skills under ~/.hermes/skills on Linux/macOS.
+  install_root: "${HOME}/.hermes/skills"
+  variant: default
+
 # Portable project-scoped profiles.
 claude-project:
   install_root: "${PROJECT_ROOT}/.claude/skills"

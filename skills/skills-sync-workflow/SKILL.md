@@ -106,6 +106,22 @@ python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-cathay check
 python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-cathay status
 ```
 
+## Hermes Agent on Ubuntu
+
+Hermes Agent reads user skills from `${HOME}/.hermes/skills`, so use the
+`hermes-user` profile inside the Ubuntu VM where Hermes is installed:
+
+```bash
+cd ~/skills-sync-public
+python bin/skills-sync --hub ~/skills-hub-public check
+python bin/skills-sync --hub ~/skills-hub-public status
+python bin/skills-sync --hub ~/skills-hub-public install --profile hermes-user
+```
+
+Prefer cloning the sync tool and hub inside the VM instead of syncing directly
+from a Windows `C:\Project\...` path. If you want Hermes to read shared skills
+without owning them, install to `agents-user` and configure Hermes
+`skills.external_dirs` with `~/.agents/skills`.
 ## Install Skills
 
 Install the public workflow skill to all enabled profiles in

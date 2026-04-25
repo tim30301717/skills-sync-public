@@ -70,6 +70,35 @@ paths belong in `targets.local.yaml`, never in shared public repos.
 `targets.yaml` 決定這個 hub 要同步到哪些 profiles。和個人電腦有關的路徑
 應該放在 `targets.local.yaml`，不要放進共享的 public repo。
 
+## Hermes Agent / Ubuntu VM
+
+Hermes Agent uses the Agent Skills format and reads user skills from
+`${HOME}/.hermes/skills`. To sync a hub into Hermes inside an Ubuntu VM,
+clone both repos inside the VM and install with the `hermes-user` profile:
+
+```bash
+cd ~/skills-sync-public
+python bin/skills-sync --hub ~/skills-hub-public check
+python bin/skills-sync --hub ~/skills-hub-public status
+python bin/skills-sync --hub ~/skills-hub-public install --profile hermes-user
+```
+
+To make Hermes part of a hub's default sync targets, enable it in that hub's
+`targets.yaml`:
+
+```yaml
+profiles:
+  - hermes-user
+```
+
+If you prefer Hermes to scan a shared read-only skill directory instead, sync
+to `agents-user` and add the external directory in `~/.hermes/config.yaml`:
+
+```yaml
+skills:
+  external_dirs:
+    - ~/.agents/skills
+```
 ## Useful Commands / 常用指令
 
 ```powershell
