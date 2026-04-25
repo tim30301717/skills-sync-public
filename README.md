@@ -13,16 +13,21 @@ The tool repo is intentionally separate from skill content:
 ## Quick Start
 
 ```powershell
-cd C:\Project\ClaudeCode\skills-sync-public
-copy targets.local.yaml.example targets.local.yaml
+# Clone this repo and move into it.
+git clone https://github.com/tim30301717/skills-sync-public.git
+cd skills-sync-public
+
+# Optional: create local machine-specific settings.
+Copy-Item targets.local.yaml.example targets.local.yaml
 
 # Validate the public workflow skill in this repo.
 python bin\skills-sync check
 
-# Validate or install a separate hub.
-python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-cathay check
-python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-cathay status
-python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-cathay install --profile claude-user
+# Validate or install a separate skills hub.
+$hub = "<path-to-your-skills-hub>"
+python bin\skills-sync --hub $hub check
+python bin\skills-sync --hub $hub status
+python bin\skills-sync --hub $hub install --profile claude-user
 ```
 
 You can also set `SKILLS_SYNC_HUB` instead of passing `--hub`.
