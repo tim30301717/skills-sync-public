@@ -1,0 +1,623 @@
+#!/usr/bin/env python3
+"""
+skills-sync — single-source-of-truth + per-profile deployment for AI tool skills.
+
+Commands:
+  install   canonical -> targets (idempotent, refuses to clobber drifted targets)
+  status    three-way compare: canonical / last-install fingerprint / target
+  diff      show actual diff of a skill in a profile
+  import    pull a target's current state back into canonical (variant-aware)
+  check     validate skill.yaml + frontmatter + variant consistency
+"""
+
+from __future__ import annotations
+
+import argparse
+import difflib
+import hashlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Iterable
+
+try:
+    import yaml
+except ImportError:
+    sys.exit("pyyaml is required: pip install pyyaml")
+
+# Windows default stdout encoding (cp950/cp1252) chokes on BOMs, emoji, etc.
+# Force UTF-8 so diff output of arbitrary skill content works.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+CONFIG_DIR = REPO_ROOT / "config"
+DEFAULT_HUB_ENV = "SKILLS_SYNC_HUB"
+
+# Files we never propagate (per-skill metadata stays in canonical only)
+SKIP_FILES = {"skill.yaml"}
+
+# ---------------------------------------------------------------------------
+# Config loading
+# ---------------------------------------------------------------------------
+
+
+def load_yaml(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    with path.open("r", encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
+
+
+def resolve_hub_root(value: str | None = None) -> Path:
+    raw = value or os.environ.get(DEFAULT_HUB_ENV)
+    if not raw:
+        return REPO_ROOT
+    return Path(raw).expanduser().resolve()
+
+
+def load_vars(hub_root: Path) -> dict[str, str]:
+    tool_local = load_yaml(REPO_ROOT / "targets.local.yaml")
+    hub_local = load_yaml(hub_root / "targets.local.yaml")
+    env_vars = dict(os.environ)
+    v = dict(env_vars)
+    v.update(tool_local.get("vars", {}) or {})
+    v.update(hub_local.get("vars", {}) or {})
+    return v
+
+
+def expand(s: str, vars_: dict[str, str]) -> str:
+    def sub(m: re.Match) -> str:
+        key = m.group(1)
+        if key not in vars_:
+            raise KeyError(f"undefined var ${{{key}}} (set in targets.local.yaml)")
+        return vars_[key]
+    return re.sub(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", sub, s)
+
+
+def load_profiles() -> tuple[dict, dict]:
+    """Return (profiles, groups).
+
+    `_groups` is a logical alias map (e.g. cowork -> [cowork-vault, ...]).
+    A skill's skill.yaml `targets:` may reference either real profiles or
+    group names — groups are expanded at runtime by `expand_profile_list`.
+    """
+    raw = load_yaml(CONFIG_DIR / "profiles.yaml")
+    groups = raw.pop("_groups", {}) or {}
+    return raw, groups
+
+
+def load_targets(hub_root: Path) -> list[str]:
+    t = load_yaml(hub_root / "targets.yaml")
+    return t.get("profiles", []) or []
+
+
+def expand_profile_list(names: list[str], groups: dict) -> list[str]:
+    """Expand any group references in a list of profile/group names.
+
+    Unknown names pass through unchanged (caller validates against profiles).
+    Preserves order and de-duplicates.
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+    for n in names:
+        members = groups.get(n)
+        if members is None:
+            expanded = [n]
+        elif isinstance(members, str):
+            expanded = [members]
+        else:
+            expanded = list(members)
+        for m in expanded:
+            if m not in seen:
+                seen.add(m)
+                out.append(m)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Skill discovery
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class Skill:
+    skill_id: str
+    path: Path
+    meta: dict
+
+    @property
+    def variants(self) -> dict[str, str]:
+        return self.meta.get("variants", {"default": "SKILL.md"})
+
+    @property
+    def targets(self) -> list[str]:
+        return self.meta.get("targets", [])
+
+    def variant_file(self, variant: str) -> Path | None:
+        fname = self.variants.get(variant) or self.variants.get("default")
+        if not fname:
+            return None
+        p = self.path / fname
+        return p if p.exists() else None
+
+
+def discover_skills(hub_root: Path) -> list[Skill]:
+    skills_dir = hub_root / "skills"
+    if not skills_dir.exists():
+        return []
+    out = []
+    for d in sorted(skills_dir.iterdir()):
+        if not d.is_dir():
+            continue
+        meta_path = d / "skill.yaml"
+        meta = load_yaml(meta_path) if meta_path.exists() else {}
+        meta.setdefault("variants", {"default": "SKILL.md"})
+        out.append(Skill(skill_id=d.name, path=d, meta=meta))
+    return out
+
+
+def find_skill(skill_id: str, hub_root: Path) -> Skill:
+    for s in discover_skills(hub_root):
+        if s.skill_id == skill_id:
+            return s
+    raise SystemExit(f"skill not found: {skill_id}")
+
+
+# ---------------------------------------------------------------------------
+# File operations
+# ---------------------------------------------------------------------------
+
+
+def sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def iter_skill_files(skill: Skill, variant_src: Path) -> Iterable[tuple[Path, str]]:
+    """Yield (src_path, target_relpath) pairs to propagate for this skill."""
+    # The variant SKILL is renamed to SKILL.md at the target
+    yield (variant_src, "SKILL.md")
+    # Everything else (scripts/, references/, assets/) copied verbatim;
+    # skip variant files themselves + skill.yaml
+    variant_files = {skill.path / f for f in skill.variants.values()}
+    for root, _dirs, files in os.walk(skill.path):
+        for fn in files:
+            p = Path(root) / fn
+            if p in variant_files:
+                continue
+            if p.name in SKIP_FILES:
+                continue
+            if p == variant_src:
+                continue
+            rel = p.relative_to(skill.path)
+            yield (p, rel.as_posix())
+
+
+def target_skill_root(profile: str, skill_id: str, profiles: dict, vars_: dict) -> Path:
+    pcfg = profiles.get(profile)
+    if not pcfg:
+        raise SystemExit(f"profile not defined in profiles.yaml: {profile}")
+    root = expand(pcfg["install_root"], vars_)
+    return Path(root) / skill_id
+
+
+def resolve_variant(profile: str, skill: Skill, profiles: dict) -> tuple[str, Path | None]:
+    """Return (variant_name, variant_src_path). Falls back to default."""
+    pcfg = profiles.get(profile, {})
+    variant = pcfg.get("variant", "default")
+    src = skill.variant_file(variant)
+    if src is None and variant != "default":
+        src = skill.variant_file("default")
+        variant = "default"
+    return variant, src
+
+
+# ---------------------------------------------------------------------------
+# Fingerprint state
+# ---------------------------------------------------------------------------
+
+
+def state_file(profile: str, skill_id: str, hub_root: Path) -> Path:
+    return hub_root / ".skills-sync-state" / profile / f"{skill_id}.json"
+
+
+def read_state(profile: str, skill_id: str, hub_root: Path) -> dict:
+    p = state_file(profile, skill_id, hub_root)
+    if not p.exists():
+        return {}
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
+def write_state(profile: str, skill_id: str, hub_root: Path, fingerprint: dict) -> None:
+    p = state_file(profile, skill_id, hub_root)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(fingerprint, indent=2, sort_keys=True), encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# status (three-way compare)
+# ---------------------------------------------------------------------------
+
+
+def compute_fingerprints(files: list[tuple[Path, str]]) -> dict[str, str]:
+    return {rel: sha256(src) for src, rel in files if src.exists()}
+
+
+def scan_target_fingerprints(target_root: Path) -> dict[str, str]:
+    if not target_root.exists():
+        return {}
+    out = {}
+    for root, _dirs, files in os.walk(target_root):
+        for fn in files:
+            p = Path(root) / fn
+            rel = p.relative_to(target_root).as_posix()
+            out[rel] = sha256(p)
+    return out
+
+
+def classify(canonical_fp: dict, state_fp: dict, target_fp: dict) -> str:
+    if not target_fp and not state_fp:
+        return "missing"
+    canon_eq_state = canonical_fp == state_fp
+    state_eq_target = state_fp == target_fp
+    canon_eq_target = canonical_fp == target_fp
+    if canon_eq_state and state_eq_target:
+        return "synced"
+    if canon_eq_target:
+        # repo state drifted (unusual), treat as synced
+        return "synced"
+    if canon_eq_state and not state_eq_target:
+        return "drifted"  # target changed externally
+    if state_eq_target and not canon_eq_state:
+        return "ahead"    # canonical changed, target untouched
+    return "conflict"     # both changed
+
+
+def cmd_status(args) -> int:
+    hub_root = args.hub_root
+    profiles, groups = load_profiles()
+    vars_ = load_vars(hub_root)
+    active = [args.profile] if args.profile else load_targets(hub_root)
+    active = expand_profile_list(active, groups)
+    if not active:
+        print("no profiles active in targets.yaml")
+        return 0
+
+    skills = discover_skills(hub_root)
+    any_issue = False
+    for profile in active:
+        print(f"\n[{profile}]")
+        for skill in skills:
+            skill_targets = expand_profile_list(skill.targets, groups)
+            if skill_targets and profile not in skill_targets:
+                continue
+            _, src = resolve_variant(profile, skill, profiles)
+            if src is None:
+                print(f"  {skill.skill_id:30s} no SKILL.md in canonical")
+                continue
+            try:
+                target_root = target_skill_root(profile, skill.skill_id, profiles, vars_)
+            except KeyError as e:
+                print(f"  {skill.skill_id:30s} ERROR {e}")
+                any_issue = True
+                continue
+            canonical_fp = compute_fingerprints(list(iter_skill_files(skill, src)))
+            state_fp = read_state(profile, skill.skill_id, hub_root)
+            target_fp = scan_target_fingerprints(target_root)
+            status = classify(canonical_fp, state_fp, target_fp)
+            flag = "" if status == "synced" else "  <-- action needed"
+            print(f"  {skill.skill_id:30s} {status}{flag}")
+            if status != "synced":
+                any_issue = True
+    return 0 if not any_issue else 1
+
+
+# ---------------------------------------------------------------------------
+# install
+# ---------------------------------------------------------------------------
+
+
+def cmd_install(args) -> int:
+    hub_root = args.hub_root
+    profiles, groups = load_profiles()
+    vars_ = load_vars(hub_root)
+    active = [args.profile] if args.profile else load_targets(hub_root)
+    active = expand_profile_list(active, groups)
+    if not active:
+        print("no profiles active in targets.yaml")
+        return 0
+
+    skills = discover_skills(hub_root)
+    if args.skill:
+        skills = [s for s in skills if s.skill_id == args.skill]
+        if not skills:
+            raise SystemExit(f"skill not found: {args.skill}")
+
+    changed = 0
+    for profile in active:
+        for skill in skills:
+            skill_targets = expand_profile_list(skill.targets, groups)
+            if skill_targets and profile not in skill_targets:
+                continue
+            variant, src = resolve_variant(profile, skill, profiles)
+            if src is None:
+                print(f"skip {profile}/{skill.skill_id}: no SKILL file")
+                continue
+            try:
+                target_root = target_skill_root(profile, skill.skill_id, profiles, vars_)
+            except KeyError as e:
+                print(f"skip {profile}/{skill.skill_id}: {e}")
+                continue
+
+            state_fp = read_state(profile, skill.skill_id, hub_root)
+            target_fp = scan_target_fingerprints(target_root)
+            if state_fp and target_fp != state_fp and not args.force:
+                # target drifted — refuse unless --force
+                print(f"REFUSE {profile}/{skill.skill_id}: target drifted; "
+                      f"run `skills-sync import {profile}/{skill.skill_id}` or pass --force")
+                continue
+
+            files = list(iter_skill_files(skill, src))
+            new_fp: dict[str, str] = {}
+            target_root.mkdir(parents=True, exist_ok=True)
+
+            # Clean stale files from the target that no longer exist in canonical
+            desired_rel = {rel for _s, rel in files}
+            for rel in list(target_fp.keys()):
+                if rel not in desired_rel:
+                    p = target_root / rel
+                    if p.exists():
+                        p.unlink()
+                        try:
+                            p.parent.rmdir()
+                        except OSError:
+                            pass
+
+            any_write = False
+            for src_path, rel in files:
+                dst = target_root / rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                new_hash = sha256(src_path)
+                new_fp[rel] = new_hash
+                if not dst.exists() or sha256(dst) != new_hash:
+                    shutil.copy2(src_path, dst)
+                    any_write = True
+
+            write_state(profile, skill.skill_id, hub_root, new_fp)
+            if any_write:
+                print(f"wrote  {profile}/{skill.skill_id} (variant={variant})")
+                changed += 1
+            else:
+                # still update state file if missing
+                if not state_fp:
+                    print(f"state  {profile}/{skill.skill_id} (variant={variant}, already in sync)")
+
+    print(f"\n{changed} skill(s) written")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# diff
+# ---------------------------------------------------------------------------
+
+
+def cmd_diff(args) -> int:
+    hub_root = args.hub_root
+    profiles, _groups = load_profiles()
+    vars_ = load_vars(hub_root)
+    skill = find_skill(args.skill, hub_root)
+    profile = args.profile
+    _, src = resolve_variant(profile, skill, profiles)
+    if src is None:
+        raise SystemExit(f"no SKILL file for {skill.skill_id}")
+    target_root = target_skill_root(profile, skill.skill_id, profiles, vars_)
+
+    any_diff = False
+    files = list(iter_skill_files(skill, src))
+    canonical_rel = {rel: sp for sp, rel in files}
+    target_rel = set()
+    if target_root.exists():
+        for root, _dirs, fnames in os.walk(target_root):
+            for fn in fnames:
+                p = Path(root) / fn
+                rel = p.relative_to(target_root).as_posix()
+                target_rel.add(rel)
+
+    all_rel = sorted(set(canonical_rel) | target_rel)
+    for rel in all_rel:
+        a = canonical_rel.get(rel)
+        b = target_root / rel
+        a_lines = a.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True) if a and a.exists() else []
+        b_lines = b.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True) if b.exists() else []
+        if a_lines == b_lines:
+            continue
+        any_diff = True
+        a_name = f"canonical/{skill.skill_id}/{rel}" if a else f"(absent)/{rel}"
+        b_name = f"{profile}/{skill.skill_id}/{rel}"
+        for line in difflib.unified_diff(a_lines, b_lines, fromfile=a_name, tofile=b_name):
+            sys.stdout.write(line)
+    if not any_diff:
+        print(f"no diff for {profile}/{skill.skill_id}")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# import (pull target -> canonical variant)
+# ---------------------------------------------------------------------------
+
+
+def cmd_import(args) -> int:
+    hub_root = args.hub_root
+    profiles, _groups = load_profiles()
+    vars_ = load_vars(hub_root)
+    try:
+        profile, skill_id = args.target.split("/", 1)
+    except ValueError:
+        raise SystemExit("expected <profile>/<skill_id>, e.g. claude-code/obsidian-cli")
+
+    skill = find_skill(skill_id, hub_root)
+    variant, _existing = resolve_variant(profile, skill, profiles)
+    variant_filename = skill.variants.get(variant, "SKILL.md")
+    target_root = target_skill_root(profile, skill_id, profiles, vars_)
+    if not target_root.exists():
+        raise SystemExit(f"target does not exist: {target_root}")
+
+    # Show diff first
+    print(f"=== Import {profile}/{skill_id} (variant: {variant} -> {variant_filename}) ===\n")
+    sys.argv = ["diff", "--profile", profile, skill_id]
+
+    canonical_files: dict[str, Path] = {}
+    _, src = resolve_variant(profile, skill, profiles)
+    if src is not None:
+        for sp, rel in iter_skill_files(skill, src):
+            canonical_files[rel] = sp
+
+    target_files: dict[str, Path] = {}
+    for root, _dirs, fnames in os.walk(target_root):
+        for fn in fnames:
+            p = Path(root) / fn
+            rel = p.relative_to(target_root).as_posix()
+            target_files[rel] = p
+
+    changes = []
+    all_rel = sorted(set(canonical_files) | set(target_files))
+    for rel in all_rel:
+        a = canonical_files.get(rel)
+        b = target_files.get(rel)
+        if a and b and sha256(a) == sha256(b):
+            continue
+        changes.append((rel, a, b))
+
+    if not changes:
+        print("no changes to import")
+        return 0
+
+    for rel, a, b in changes:
+        a_lines = a.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True) if a and a.exists() else []
+        b_lines = b.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True) if b and b.exists() else []
+        for line in difflib.unified_diff(
+            a_lines, b_lines,
+            fromfile=f"canonical/{skill_id}/{rel}",
+            tofile=f"{profile}/{skill_id}/{rel}",
+        ):
+            sys.stdout.write(line)
+        print()
+
+    if not args.yes:
+        resp = input("Apply these changes to canonical? [y/N] ").strip().lower()
+        if resp != "y":
+            print("aborted")
+            return 1
+
+    # Apply: map target's SKILL.md back to the variant file in canonical
+    for rel, _a, b in changes:
+        if rel == "SKILL.md":
+            dst = skill.path / variant_filename
+        else:
+            dst = skill.path / rel
+        if b is None:
+            # file removed in target
+            if dst.exists():
+                dst.unlink()
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(b, dst)
+
+    # Update fingerprint to the new target state (target & canonical variant now match)
+    _, src = resolve_variant(profile, skill, profiles)
+    new_fp = compute_fingerprints(list(iter_skill_files(skill, src))) if src else {}
+    write_state(profile, skill_id, hub_root, new_fp)
+    print(f"imported {len(changes)} file(s) into canonical; review with `git diff` and commit")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# check
+# ---------------------------------------------------------------------------
+
+
+def cmd_check(args) -> int:
+    hub_root = args.hub_root
+    profiles, groups = load_profiles()
+    skills = discover_skills(hub_root)
+    errors = 0
+    for skill in skills:
+        # variant files must exist + not have BOM (breaks frontmatter parsers)
+        for variant, fname in skill.variants.items():
+            p = skill.path / fname
+            if not p.exists():
+                print(f"ERROR {skill.skill_id}: variant '{variant}' missing file {fname}")
+                errors += 1
+                continue
+            if p.read_bytes().startswith(b"\xef\xbb\xbf"):
+                print(f"ERROR {skill.skill_id}/{fname}: UTF-8 BOM present (breaks frontmatter)")
+                errors += 1
+        # each declared target must reference a known profile or group
+        for t in skill.targets:
+            if t not in profiles and t not in groups:
+                print(f"ERROR {skill.skill_id}: targets declares unknown profile/group '{t}'")
+                errors += 1
+    if errors == 0:
+        print(f"OK: {len(skills)} skill(s) valid")
+    return 0 if errors == 0 else 1
+
+
+# ---------------------------------------------------------------------------
+# argparse
+# ---------------------------------------------------------------------------
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(prog="skills-sync")
+    p.add_argument(
+        "--hub",
+        help=(
+            "Path to a skills hub. Defaults to this repo, or the "
+            f"{DEFAULT_HUB_ENV} environment variable when set."
+        ),
+    )
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    p_status = sub.add_parser("status", help="three-way compare canonical/state/target")
+    p_status.add_argument("--profile")
+    p_status.set_defaults(func=cmd_status)
+
+    p_install = sub.add_parser("install", help="propagate canonical to targets")
+    p_install.add_argument("--profile")
+    p_install.add_argument("--skill")
+    p_install.add_argument("--force", action="store_true",
+                           help="overwrite target even if drifted")
+    p_install.set_defaults(func=cmd_install)
+
+    p_diff = sub.add_parser("diff", help="show diff between canonical and target")
+    p_diff.add_argument("--profile", required=True)
+    p_diff.add_argument("skill")
+    p_diff.set_defaults(func=cmd_diff)
+
+    p_import = sub.add_parser("import", help="pull target back into canonical variant")
+    p_import.add_argument("target", help="<profile>/<skill_id>")
+    p_import.add_argument("-y", "--yes", action="store_true", help="skip confirmation")
+    p_import.set_defaults(func=cmd_import)
+
+    p_check = sub.add_parser("check", help="validate skill.yaml + variants")
+    p_check.set_defaults(func=cmd_check)
+
+    args = p.parse_args()
+    args.hub_root = resolve_hub_root(args.hub)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

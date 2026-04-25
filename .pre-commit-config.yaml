@@ -1,0 +1,25 @@
+# Pre-commit hooks for skills-sync.
+#
+# Setup (one-time per machine):
+#   pip install pre-commit
+#   pre-commit install
+#
+# Run manually:
+#   pre-commit run --all-files
+
+repos:
+  - repo: local
+    hooks:
+      - id: skills-sync-check
+        name: skills-sync check (frontmatter + variant validation)
+        entry: python bin/skills-sync check
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: no-local-targets
+        name: ensure targets.local.yaml is not tracked
+        entry: python -c "import subprocess,sys; r=subprocess.run(['git','ls-files','targets.local.yaml'],capture_output=True,text=True); sys.exit('targets.local.yaml is tracked in git; add to .gitignore and untrack' if r.stdout.strip() else 0)"
+        language: system
+        pass_filenames: false
+        always_run: true

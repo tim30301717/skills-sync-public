@@ -1,0 +1,73 @@
+# Tool/profile install locations. Paths may reference variables from:
+# 1. environment variables
+# 2. targets.local.yaml next to the skills-sync tool
+# 3. targets.local.yaml inside the selected hub
+#
+# Keep machine-specific values out of git. Put them in a local
+# targets.local.yaml file instead.
+
+_groups:
+  # Tim's Cowork setup needs the same skill installed into multiple project
+  # anchors because tasks may start from different roots.
+  cowork:
+    - cowork-vault
+    - cowork-obsidian
+    - cowork-claude
+
+# Portable user-scoped profiles.
+claude-user:
+  install_root: "${HOME}/.claude/skills"
+  variant: default
+
+agents-user:
+  # Shared by current Codex/Gemini style agent skills.
+  install_root: "${HOME}/.agents/skills"
+  variant: default
+
+gemini-user:
+  install_root: "${HOME}/.gemini/skills"
+  variant: default
+
+# Portable project-scoped profiles.
+claude-project:
+  install_root: "${PROJECT_ROOT}/.claude/skills"
+  variant: default
+
+agents-project:
+  install_root: "${PROJECT_ROOT}/.agents/skills"
+  variant: default
+
+gemini-workspace:
+  install_root: "${PROJECT_ROOT}/.gemini/skills"
+  variant: default
+
+# Backward-compatible profile names used by Tim's existing hubs.
+claude-code:
+  install_root: "${HOME}/.claude/skills"
+  variant: default
+
+codex:
+  # Legacy Codex Desktop path currently used on Tim's machine.
+  install_root: "${HOME}/.codex/skills"
+  variant: default
+
+gemini-cli:
+  install_root: "${HOME}/.gemini/skills"
+  variant: default
+
+# Tim-specific project anchors. Keep disabled unless local vars are configured.
+cowork-vault:
+  install_root: "${COWORK_VAULT_DIR}/.claude/skills"
+  variant: cowork
+
+cowork-obsidian:
+  install_root: "${COWORK_OBSIDIAN_DIR}/.claude/skills"
+  variant: cowork
+
+cowork-claude:
+  install_root: "${COWORK_CLAUDE_DIR}/.claude/skills"
+  variant: cowork
+
+cherry-claw:
+  install_root: "${CHERRYSTUDIO_SKILLS_DIR}"
+  variant: default

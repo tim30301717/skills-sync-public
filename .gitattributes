@@ -1,0 +1,26 @@
+# Normalize all text files to LF in the repo.
+# Windows working copies can check out as CRLF if user prefers,
+# but repo-side is always LF so cross-platform diffs are clean
+# and AI tools don't choke on mixed endings.
+
+* text=auto eol=lf
+
+# Explicitly LF for files that MUST stay LF (shell scripts, Python, YAML)
+*.sh      text eol=lf
+*.py      text eol=lf
+*.yaml    text eol=lf
+*.yml     text eol=lf
+*.md      text eol=lf
+*.json    text eol=lf
+
+# skills-sync CLI is a Python shebang script with no extension
+bin/skills-sync text eol=lf
+
+# Binary files — never munge
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.pdf     binary
+*.zip     binary
+*.gz      binary

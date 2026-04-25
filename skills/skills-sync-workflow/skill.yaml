@@ -1,0 +1,10 @@
+id: skills-sync-workflow
+version: 0.1.1
+variants:
+  default: SKILL.md
+targets:
+- claude-code
+- codex
+- cowork
+- cherry-claw
+- gemini-cli

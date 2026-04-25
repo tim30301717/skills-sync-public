@@ -1,0 +1,4 @@
+interface:
+  display_name: "Skills Sync Workflow"
+  short_description: "Check and sync shared skills"
+  default_prompt: "Use $skills-sync-workflow to check skill sync status and import the current target's changes back to the skills-sync repo."

@@ -1,0 +1,22 @@
+# Copy to targets.yaml in a tool repo or hub, then enable the profiles you want.
+# The CLI reads targets.yaml from the selected hub.
+
+profiles:
+  # Portable defaults for shared team use:
+  - claude-user
+  # - agents-user
+  # - gemini-user
+
+  # Project-scoped examples:
+  # - claude-project
+  # - agents-project
+  # - gemini-workspace
+
+  # Tim legacy/current local profiles:
+  # - claude-code
+  # - codex
+  # - gemini-cli
+  # - cowork-vault
+  # - cowork-obsidian
+  # - cowork-claude
+  # - cherry-claw

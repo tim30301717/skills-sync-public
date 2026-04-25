@@ -1,0 +1,210 @@
+---
+name: skills-sync-workflow
+description: Manage Tim's split skills-sync workflow: use the public sync engine repo with private or team skills hubs, check sync status, install skills to AI tools, import target edits back to the right hub, and keep the workflow skill itself synchronized.
+---
+
+# Skills Sync Workflow
+
+## Repository Model
+
+The sync engine and skill content are intentionally split.
+
+| Purpose | Local path | GitHub visibility |
+|---|---|---|
+| Sync tool and workflow skill | `C:\Project\ClaudeCode\skills-sync-public` | public |
+| Tim's personal skills hub | `C:\Project\ClaudeCode\skills-hub-tim-private` | private |
+| Cathay/team skills hub | `C:\Project\ClaudeCode\skills-hub-cathay` | private |
+| Legacy source/migration repo | `C:\Project\ClaudeCode\skills-sync` | private/archive only |
+
+Use `skills-sync-public` for the CLI. Use `--hub <hub-path>` whenever the
+skill content lives in a separate hub.
+
+```powershell
+cd C:\Project\ClaudeCode\skills-sync-public
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-tim-private status
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-cathay status
+```
+
+Without `--hub`, the CLI treats `skills-sync-public` itself as the hub. That is
+mainly for installing or updating this `skills-sync-workflow` skill.
+
+## Common Profiles
+
+Portable profiles:
+
+| Profile | Target folder |
+|---|---|
+| `claude-user` | `${HOME}/.claude/skills` |
+| `agents-user` | `${HOME}/.agents/skills` |
+| `gemini-user` | `${HOME}/.gemini/skills` |
+| `claude-project` | `${PROJECT_ROOT}/.claude/skills` |
+| `agents-project` | `${PROJECT_ROOT}/.agents/skills` |
+| `gemini-workspace` | `${PROJECT_ROOT}/.gemini/skills` |
+
+Tim's backward-compatible profiles:
+
+| Profile | Target folder |
+|---|---|
+| `claude-code` | `${HOME}/.claude/skills` |
+| `codex` | `${HOME}/.codex/skills` |
+| `gemini-cli` | `${HOME}/.gemini/skills` |
+| `cowork-vault` | `${COWORK_VAULT_DIR}/.claude/skills` |
+| `cowork-obsidian` | `${COWORK_OBSIDIAN_DIR}/.claude/skills` |
+| `cowork-claude` | `${COWORK_CLAUDE_DIR}/.claude/skills` |
+| `cherry-claw` | `${CHERRYSTUDIO_SKILLS_DIR}` |
+
+`cowork` is a logical group in `config/profiles.yaml` that expands to the three
+Cowork anchors. `import` must use a concrete anchor, not the group.
+
+## Guardrails
+
+- Treat each hub's `skills/` folder as canonical for that hub.
+- Do not put personal skills into `skills-sync-public`.
+- Keep `targets.local.yaml` local and untracked.
+- Use `--hub C:\Project\ClaudeCode\skills-hub-tim-private` for Tim's personal skills.
+- Use `--hub C:\Project\ClaudeCode\skills-hub-cathay` for Cathay/team skills.
+- Do not use `--force` unless Tim explicitly wants to discard target-side edits.
+- Before `import`, run `diff` and inspect what will be pulled into the hub.
+- Do not manage Codex built-ins such as `.system` or bundled plugin skills.
+
+## Status Meanings
+
+| Status | Meaning | Usual action |
+|---|---|---|
+| `synced` | hub, state, and target match | No action |
+| `ahead` | hub changed; target still matches last install | Run `install` |
+| `drifted` | target changed outside `skills-sync` | Run `diff`, then `import` if the change should be kept |
+| `conflict` | hub and target both changed | Inspect both sides; avoid `--force`; import or manually merge |
+| `missing` | target does not have the skill yet | Run `install` |
+
+## Check Health
+
+For the public workflow skill:
+
+```powershell
+cd C:\Project\ClaudeCode\skills-sync-public
+git status -sb
+python bin\skills-sync check
+python bin\skills-sync status
+```
+
+For Tim's private hub:
+
+```powershell
+cd C:\Project\ClaudeCode\skills-sync-public
+git -C C:\Project\ClaudeCode\skills-hub-tim-private status -sb
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-tim-private check
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-tim-private status
+```
+
+For Cathay/team skills:
+
+```powershell
+cd C:\Project\ClaudeCode\skills-sync-public
+git -C C:\Project\ClaudeCode\skills-hub-cathay status -sb
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-cathay check
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-cathay status
+```
+
+## Install Skills
+
+Install the public workflow skill to all enabled profiles in
+`skills-sync-public/targets.yaml`:
+
+```powershell
+cd C:\Project\ClaudeCode\skills-sync-public
+python bin\skills-sync check
+python bin\skills-sync install --skill skills-sync-workflow
+python bin\skills-sync status
+```
+
+Install Tim's private hub:
+
+```powershell
+cd C:\Project\ClaudeCode\skills-sync-public
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-tim-private check
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-tim-private install
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-tim-private status
+```
+
+Install the Cathay/team hub:
+
+```powershell
+cd C:\Project\ClaudeCode\skills-sync-public
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-cathay check
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-cathay install
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-cathay status
+```
+
+For one skill:
+
+```powershell
+python bin\skills-sync --hub <hub-path> install --profile <profile> --skill <skill-id>
+```
+
+## Import Target Edits
+
+Pick the hub that owns the skill, then import from the profile where the edit
+happened.
+
+```powershell
+cd C:\Project\ClaudeCode\skills-sync-public
+python bin\skills-sync --hub <hub-path> status --profile <profile>
+python bin\skills-sync --hub <hub-path> diff --profile <profile> <skill-id>
+python bin\skills-sync --hub <hub-path> import <profile>/<skill-id>
+python bin\skills-sync --hub <hub-path> check
+git -C <hub-path> diff -- skills/<skill-id>
+```
+
+Examples:
+
+```powershell
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-tim-private import codex/obsidian-search
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-tim-private import claude-code/obsidian-search
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-tim-private import cowork-vault/obsidian-search
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-cathay import claude-user/<skill-id>
+```
+
+After reviewing, commit in the hub repo:
+
+```powershell
+git -C <hub-path> status -sb
+git -C <hub-path> add skills/<skill-id>
+git -C <hub-path> commit -m "Update <skill-id> skill"
+git -C <hub-path> push
+```
+
+## Add A New Skill
+
+Create the skill in the owning hub:
+
+```text
+<hub-path>/
+  skills/
+    <skill-id>/
+      SKILL.md
+      skill.yaml
+```
+
+Minimal `skill.yaml`:
+
+```yaml
+id: <skill-id>
+version: 0.1.0
+variants:
+  default: SKILL.md
+targets:
+  - claude-user
+```
+
+Then validate and install:
+
+```powershell
+cd C:\Project\ClaudeCode\skills-sync-public
+python bin\skills-sync --hub <hub-path> check
+python bin\skills-sync --hub <hub-path> install --profile <profile> --skill <skill-id>
+python bin\skills-sync --hub <hub-path> status --profile <profile>
+```
+
+For Tim-only skills, prefer `skills-hub-tim-private`. For company/team skills,
+prefer `skills-hub-cathay`.

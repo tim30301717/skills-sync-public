@@ -1,0 +1,15 @@
+# Copy to targets.local.yaml and adjust for this machine. This file is ignored.
+
+vars:
+  HOME: "C:/Users/your-name"
+
+  # Required only for project-scoped profiles.
+  PROJECT_ROOT: "C:/Project/your-team-project"
+
+  # Required only for Tim's Cowork profiles.
+  COWORK_VAULT_DIR: "C:/Users/your-name/Claude/obsidian/claude-cowork"
+  COWORK_OBSIDIAN_DIR: "C:/Users/your-name/Claude/obsidian"
+  COWORK_CLAUDE_DIR: "C:/Users/your-name/Claude"
+
+  # Required only for CherryStudio/Cherry Claw.
+  CHERRYSTUDIO_SKILLS_DIR: "C:/Users/your-name/AppData/Roaming/CherryStudio/Data/Skills"

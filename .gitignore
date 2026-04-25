@@ -1,0 +1,26 @@
+# Local machine and hub configuration.
+targets.local.yaml
+targets.yaml
+
+# Local install fingerprints.
+.skills-sync-state/
+
+# Optional private skills inside a tool checkout.
+skills.private/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
