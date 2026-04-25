@@ -564,6 +564,23 @@ def cmd_check(args) -> int:
             if p.read_bytes().startswith(b"\xef\xbb\xbf"):
                 print(f"ERROR {skill.skill_id}/{fname}: UTF-8 BOM present (breaks frontmatter)")
                 errors += 1
+                continue
+            text = p.read_text(encoding="utf-8")
+            parts = re.split(r"^---\s*$", text, maxsplit=2, flags=re.MULTILINE)
+            if len(parts) < 3 or parts[0].strip():
+                print(f"ERROR {skill.skill_id}/{fname}: missing YAML frontmatter")
+                errors += 1
+                continue
+            try:
+                frontmatter = yaml.safe_load(parts[1]) or {}
+            except yaml.YAMLError as e:
+                print(f"ERROR {skill.skill_id}/{fname}: invalid YAML frontmatter: {e}")
+                errors += 1
+                continue
+            for key in ("name", "description"):
+                if not isinstance(frontmatter.get(key), str) or not frontmatter.get(key).strip():
+                    print(f"ERROR {skill.skill_id}/{fname}: frontmatter '{key}' must be a non-empty string")
+                    errors += 1
         # each declared target must reference a known profile or group
         for t in skill.targets:
             if t not in profiles and t not in groups:
