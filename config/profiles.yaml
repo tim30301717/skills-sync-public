@@ -24,6 +24,10 @@ agents-user:
   install_root: "${HOME}/.agents/skills"
   variant: default
 
+opencode-user:
+  install_root: "${HOME}/.config/opencode/skills"
+  variant: default
+
 gemini-user:
   install_root: "${HOME}/.gemini/skills"
   variant: default
@@ -40,6 +44,10 @@ claude-project:
 
 agents-project:
   install_root: "${PROJECT_ROOT}/.agents/skills"
+  variant: default
+
+opencode-project:
+  install_root: "${PROJECT_ROOT}/.opencode/skills"
   variant: default
 
 gemini-workspace:

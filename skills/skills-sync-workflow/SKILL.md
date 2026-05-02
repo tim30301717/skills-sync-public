@@ -38,9 +38,11 @@ Portable profiles:
 |---|---|
 | `claude-user` | `${HOME}/.claude/skills` |
 | `agents-user` | `${HOME}/.agents/skills` |
+| `opencode-user` | `${HOME}/.config/opencode/skills` |
 | `gemini-user` | `${HOME}/.gemini/skills` |
 | `claude-project` | `${PROJECT_ROOT}/.claude/skills` |
 | `agents-project` | `${PROJECT_ROOT}/.agents/skills` |
+| `opencode-project` | `${PROJECT_ROOT}/.opencode/skills` |
 | `gemini-workspace` | `${PROJECT_ROOT}/.gemini/skills` |
 
 Tim's backward-compatible profiles:
@@ -124,6 +126,33 @@ Prefer cloning the sync tool and hub inside the VM instead of syncing directly
 from a Windows `C:\Project\...` path. If you want Hermes to read shared skills
 without owning them, install to `agents-user` and configure Hermes
 `skills.external_dirs` with `~/.agents/skills`.
+
+## OpenCode
+
+OpenCode discovers Agent Skills natively from:
+
+- User scope: `${HOME}/.config/opencode/skills/<skill-id>/SKILL.md`
+- Project scope: `${PROJECT_ROOT}/.opencode/skills/<skill-id>/SKILL.md`
+
+It also reads Claude-compatible `${HOME}/.claude/skills` and
+agent-compatible `${HOME}/.agents/skills`, so the existing `claude-code` or
+`agents-user` profiles may already be visible to OpenCode. Prefer
+`opencode-user` when you want an explicit OpenCode target with independent
+status, diff, and import tracking.
+
+```powershell
+cd C:\Project\ClaudeCode\skills-sync-public
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-tim-private check
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-tim-private status --profile opencode-user
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-tim-private install --profile opencode-user
+```
+
+For project-local OpenCode skills, set `PROJECT_ROOT` in `targets.local.yaml`
+and install with `--profile opencode-project`.
+
+If a skill has a `targets:` allow-list in `skill.yaml`, add `opencode-user` or
+`opencode-project` to that list before installing to the OpenCode profile.
+
 ## Install Skills
 
 Install the public workflow skill to all enabled profiles in

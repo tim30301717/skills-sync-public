@@ -4,6 +4,7 @@ variants:
   default: SKILL.md
 targets:
 - claude-code
+- opencode-user
 - codex
 - cowork
 - cherry-claw

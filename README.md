@@ -99,6 +99,22 @@ skills:
   external_dirs:
     - ~/.agents/skills
 ```
+
+## OpenCode
+
+OpenCode reads Agent Skills from `${HOME}/.config/opencode/skills` for global
+skills and `${PROJECT_ROOT}/.opencode/skills` for project-local skills. Use the
+`opencode-user` or `opencode-project` profiles:
+
+```powershell
+python bin\skills-sync --hub <hub-path> install --profile opencode-user
+python bin\skills-sync --hub <hub-path> status --profile opencode-user
+```
+
+OpenCode also scans Claude-compatible `${HOME}/.claude/skills` and
+agent-compatible `${HOME}/.agents/skills`, so existing `claude-code` or
+`agents-user` installs can be visible there too.
+
 ## Useful Commands / 常用指令
 
 ```powershell

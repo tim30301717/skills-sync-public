@@ -5,12 +5,14 @@ profiles:
   # Portable defaults for shared team use:
   - claude-user
   # - agents-user
+  # - opencode-user
   # - gemini-user
   # - hermes-user
 
   # Project-scoped examples:
   # - claude-project
   # - agents-project
+  # - opencode-project
   # - gemini-workspace
 
   # Tim legacy/current local profiles:
