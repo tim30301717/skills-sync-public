@@ -115,6 +115,34 @@ OpenCode also scans Claude-compatible `${HOME}/.claude/skills` and
 agent-compatible `${HOME}/.agents/skills`, so existing `claude-code` or
 `agents-user` installs can be visible there too.
 
+## Google Antigravity
+
+Google's official Antigravity guidance says Antigravity CLI is the replacement
+terminal surface for individual Gemini CLI users, while Antigravity 2.0,
+Antigravity IDE, and Antigravity CLI share the same agent harness. The
+recommended user-level sync target is `antigravity-user`:
+
+```powershell
+python bin\skills-sync --hub <hub-path> install --profile antigravity-user
+python bin\skills-sync --hub <hub-path> status --profile antigravity-user
+```
+
+Use these profiles depending on which Antigravity surface should see the skill:
+
+| Profile | Target folder | Use when |
+|---|---|---|
+| `antigravity-user` | `${HOME}/.gemini/config/skills` | Default global Antigravity Agent Skills across workspaces |
+| `antigravity-cli` | `${HOME}/.gemini/antigravity-cli/skills` | CLI-specific global skills and slash-command staging |
+| `antigravity-workspace` | `${PROJECT_ROOT}/.agents/skills` | Project-local skills shared by Antigravity workspace agents |
+| `agents-user` | `${HOME}/.agents/skills` | Shared open Agent Skills target for tools that scan `.agents` |
+
+For Windows/macOS portability, keep the same public sync repo and private hub
+repo cloned on each machine, but keep machine paths in each machine's local
+`targets.local.yaml`. On Windows set `HOME` to the Windows user profile path;
+on macOS/Linux let the environment provide `HOME` unless you need to override
+it. Do not sync directly from OneDrive/iCloud folders when agent tools may edit
+skills concurrently; use Git as the cross-machine source of truth instead.
+
 ## Useful Commands / 常用指令
 
 ```powershell

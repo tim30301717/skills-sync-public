@@ -40,10 +40,14 @@ Portable profiles:
 | `agents-user` | `${HOME}/.agents/skills` |
 | `opencode-user` | `${HOME}/.config/opencode/skills` |
 | `gemini-user` | `${HOME}/.gemini/skills` |
+| `antigravity-user` | `${HOME}/.gemini/config/skills` |
+| `antigravity-cli` | `${HOME}/.gemini/antigravity-cli/skills` |
+| `hermes-user` | `${HOME}/.hermes/skills` |
 | `claude-project` | `${PROJECT_ROOT}/.claude/skills` |
 | `agents-project` | `${PROJECT_ROOT}/.agents/skills` |
 | `opencode-project` | `${PROJECT_ROOT}/.opencode/skills` |
 | `gemini-workspace` | `${PROJECT_ROOT}/.gemini/skills` |
+| `antigravity-workspace` | `${PROJECT_ROOT}/.agents/skills` |
 
 Tim's backward-compatible profiles:
 
@@ -152,6 +156,46 @@ and install with `--profile opencode-project`.
 
 If a skill has a `targets:` allow-list in `skill.yaml`, add `opencode-user` or
 `opencode-project` to that list before installing to the OpenCode profile.
+
+## Google Antigravity
+
+Official Google docs describe Antigravity CLI as the terminal-first surface for
+Antigravity agents and the individual-user replacement path for Gemini CLI.
+Antigravity 2.0, Antigravity IDE, and Antigravity CLI share a common agent
+harness. Agent Skills are still plain folders with `SKILL.md`, so this repo can
+support Antigravity with profiles instead of a separate sync engine.
+
+Use `antigravity-user` as the default global target:
+
+```powershell
+cd C:\Project\ClaudeCode\skills-sync-public
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-tim-private check
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-tim-private install --profile antigravity-user
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-tim-private status --profile antigravity-user
+```
+
+Use `antigravity-cli` only when you specifically want CLI-scoped global skills
+under Antigravity CLI's own config tree:
+
+```powershell
+python bin\skills-sync --hub C:\Project\ClaudeCode\skills-hub-tim-private install --profile antigravity-cli
+```
+
+For project-local Antigravity skills, set `PROJECT_ROOT` in
+`targets.local.yaml` on that machine and install with
+`--profile antigravity-workspace`. This writes to `${PROJECT_ROOT}/.agents/skills`,
+which is the shared workspace Agent Skills path.
+
+Recommended cross-machine shape:
+
+- Clone `skills-sync-public` and the owning `skills-hub-*` repos separately on
+  Windows and macOS.
+- Keep each machine's absolute paths in its own untracked `targets.local.yaml`.
+- Use Git commits/pushes in the hub as the cross-machine source of truth.
+- Before importing target-side edits, run `status` and `diff` on the concrete
+  profile where the edit happened, such as `antigravity-user/<skill-id>`.
+- Avoid iCloud/OneDrive live-sync folders for active skill targets; agent tools
+  can create conflicts while editing.
 
 ## Install Skills
 

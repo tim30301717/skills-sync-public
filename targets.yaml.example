@@ -7,6 +7,8 @@ profiles:
   # - agents-user
   # - opencode-user
   # - gemini-user
+  # - antigravity-user
+  # - antigravity-cli
   # - hermes-user
 
   # Project-scoped examples:
@@ -14,6 +16,7 @@ profiles:
   # - agents-project
   # - opencode-project
   # - gemini-workspace
+  # - antigravity-workspace
 
   # Tim legacy/current local profiles:
   # - claude-code

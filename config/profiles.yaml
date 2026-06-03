@@ -32,6 +32,16 @@ gemini-user:
   install_root: "${HOME}/.gemini/skills"
   variant: default
 
+antigravity-user:
+  # Google Antigravity shared global Agent Skills location.
+  install_root: "${HOME}/.gemini/config/skills"
+  variant: default
+
+antigravity-cli:
+  # Antigravity CLI-specific global skill staging location.
+  install_root: "${HOME}/.gemini/antigravity-cli/skills"
+  variant: default
+
 hermes-user:
   # Hermes Agent stores user skills under ~/.hermes/skills on Linux/macOS.
   install_root: "${HOME}/.hermes/skills"
@@ -52,6 +62,11 @@ opencode-project:
 
 gemini-workspace:
   install_root: "${PROJECT_ROOT}/.gemini/skills"
+  variant: default
+
+antigravity-workspace:
+  # Antigravity workspace skills use the Agent Skills standard path.
+  install_root: "${PROJECT_ROOT}/.agents/skills"
   variant: default
 
 # Backward-compatible profile names used by Tim's existing hubs.
