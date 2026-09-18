@@ -3,7 +3,7 @@
 vars:
   HOME: "C:/Users/your-name"
 
-  # Required only for project-scoped profiles.
+  # Required only for project-scoped profiles, including copilot-project.
   PROJECT_ROOT: "C:/Project/your-team-project"
 
   # Required only for Tim's Cowork profiles.

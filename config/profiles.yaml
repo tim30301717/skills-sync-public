@@ -20,8 +20,13 @@ claude-user:
   variant: default
 
 agents-user:
-  # Shared by current Codex/Gemini style agent skills.
+  # Shared Agent Skills location supported by GitHub Copilot and other tools.
   install_root: "${HOME}/.agents/skills"
+  variant: default
+
+copilot-user:
+  # GitHub Copilot-specific personal skills with independent sync state.
+  install_root: "${HOME}/.copilot/skills"
   variant: default
 
 opencode-user:
@@ -54,6 +59,11 @@ claude-project:
 
 agents-project:
   install_root: "${PROJECT_ROOT}/.agents/skills"
+  variant: default
+
+copilot-project:
+  # Repository skills visible to Copilot agents and code review.
+  install_root: "${PROJECT_ROOT}/.github/skills"
   variant: default
 
 opencode-project:

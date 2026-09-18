@@ -43,6 +43,7 @@ Portable profiles:
 |---|---|
 | `claude-user` | `${HOME}/.claude/skills` |
 | `agents-user` | `${HOME}/.agents/skills` |
+| `copilot-user` | `${HOME}/.copilot/skills` |
 | `opencode-user` | `${HOME}/.config/opencode/skills` |
 | `gemini-user` | `${HOME}/.gemini/skills` |
 | `antigravity-user` | `${HOME}/.gemini/config/skills` |
@@ -50,6 +51,7 @@ Portable profiles:
 | `hermes-user` | `${HOME}/.hermes/skills` |
 | `claude-project` | `${PROJECT_ROOT}/.claude/skills` |
 | `agents-project` | `${PROJECT_ROOT}/.agents/skills` |
+| `copilot-project` | `${PROJECT_ROOT}/.github/skills` |
 | `opencode-project` | `${PROJECT_ROOT}/.opencode/skills` |
 | `gemini-workspace` | `${PROJECT_ROOT}/.gemini/skills` |
 | `antigravity-workspace` | `${PROJECT_ROOT}/.agents/skills` |
@@ -79,6 +81,10 @@ Cowork anchors. `import` must use a concrete anchor, not the group.
 - Do not use `--force` unless Tim explicitly wants to discard target-side edits.
 - Before `import`, run `diff` and inspect what will be pulled into the hub.
 - Do not manage Codex built-ins such as `.system` or bundled plugin skills.
+- Do not enable both `agents-user` and `copilot-user` for the same skills on
+  one machine; Copilot scans both paths and duplicate names obscure precedence.
+- Treat `copilot-project` as publishable repository content. Never copy personal
+  skills, credentials, internal-only material, or unreviewed files into it.
 
 ## Status Meanings
 
@@ -161,6 +167,44 @@ and install with `--profile opencode-project`.
 
 If a skill has a `targets:` allow-list in `skill.yaml`, add `opencode-user` or
 `opencode-project` to that list before installing to the OpenCode profile.
+
+## GitHub Copilot
+
+GitHub Copilot supports the Agent Skills `SKILL.md` format directly. Prefer the
+shared `agents-user` profile for personal skills unless Copilot needs an
+isolated copy with independent sync state:
+
+```powershell
+cd <skills-sync-public>
+python bin\skills-sync --hub <skills-hub-tim-private> check
+python bin\skills-sync --hub <skills-hub-tim-private> install --profile agents-user
+python bin\skills-sync --hub <skills-hub-tim-private> status --profile agents-user
+```
+
+For an isolated personal Copilot installation, use `copilot-user`, which writes
+to `${HOME}/.copilot/skills`:
+
+```powershell
+python bin\skills-sync --hub <skills-hub-tim-private> install --profile copilot-user
+python bin\skills-sync --hub <skills-hub-tim-private> status --profile copilot-user
+```
+
+For repository-visible skills used by Copilot cloud agents or pull request code
+review, set `PROJECT_ROOT` in `targets.local.yaml` and use `copilot-project`:
+
+```powershell
+python bin\skills-sync --hub <hub-path> install --profile copilot-project
+python bin\skills-sync --hub <hub-path> status --profile copilot-project
+```
+
+`copilot-project` writes to `${PROJECT_ROOT}/.github/skills`. Review everything
+before committing it, and keep personal or internal-only skills in a user-level
+profile. If `skill.yaml` contains a `targets:` allow-list, add the selected
+Copilot profile before installing.
+
+To verify discovery, reload VS Code and use `/skills` in Copilot Chat Agent
+mode, or run `copilot skill list --json` in Copilot CLI. VS Code should have
+`chat.agent.enabled` and `chat.useAgentSkills` enabled.
 
 ## Google Antigravity
 

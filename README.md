@@ -115,6 +115,49 @@ OpenCode also scans Claude-compatible `${HOME}/.claude/skills` and
 agent-compatible `${HOME}/.agents/skills`, so existing `claude-code` or
 `agents-user` installs can be visible there too.
 
+## GitHub Copilot
+
+GitHub Copilot uses the open Agent Skills format and reads personal skills from
+`${HOME}/.agents/skills` or `${HOME}/.copilot/skills`. The recommended default
+is `agents-user`, which shares one installed copy with other compatible tools:
+
+```powershell
+python bin\skills-sync --hub <hub-path> check
+python bin\skills-sync --hub <hub-path> install --profile agents-user
+python bin\skills-sync --hub <hub-path> status --profile agents-user
+```
+
+Use `copilot-user` instead when Copilot needs its own copy and independent
+status, diff, and import history:
+
+```powershell
+python bin\skills-sync --hub <hub-path> install --profile copilot-user
+python bin\skills-sync --hub <hub-path> status --profile copilot-user
+```
+
+Do not enable `agents-user` and `copilot-user` for the same skills on the same
+machine. Copilot scans both locations, so duplicate names can hide which copy
+was loaded.
+
+For skills that must be available to Copilot cloud agents, pull request code
+review, or everyone working in a repository, set `PROJECT_ROOT` in
+`targets.local.yaml` and use `copilot-project`:
+
+```powershell
+python bin\skills-sync --hub <hub-path> install --profile copilot-project
+python bin\skills-sync --hub <hub-path> status --profile copilot-project
+```
+
+This writes to `${PROJECT_ROOT}/.github/skills`. Review the copied content
+before committing it. Keep personal skills and internal-only material in a
+personal target instead of a repository target.
+
+If a skill declares a `targets:` allow-list in `skill.yaml`, add the selected
+profile (`agents-user`, `copilot-user`, or `copilot-project`) before installing.
+In VS Code, verify that Agent mode and Agent Skills are enabled, reload the
+window, then use `/skills` to confirm discovery. In Copilot CLI, use
+`copilot skill list --json`.
+
 ## Google Antigravity
 
 Google's official Antigravity guidance says Antigravity CLI is the replacement

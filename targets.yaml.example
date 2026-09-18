@@ -4,7 +4,8 @@
 profiles:
   # Portable defaults for shared team use:
   - claude-user
-  # - agents-user
+  # - agents-user       # Recommended shared target for GitHub Copilot
+  # - copilot-user      # Copilot-only personal target; don't enable with agents-user
   # - opencode-user
   # - gemini-user
   # - antigravity-user
@@ -14,6 +15,7 @@ profiles:
   # Project-scoped examples:
   # - claude-project
   # - agents-project
+  # - copilot-project   # Writes into the repository under .github/skills
   # - opencode-project
   # - gemini-workspace
   # - antigravity-workspace

@@ -44,6 +44,15 @@ DEFAULT_HUB_ENV = "SKILLS_SYNC_HUB"
 
 # Files we never propagate (per-skill metadata stays in canonical only)
 SKIP_FILES = {"skill.yaml"}
+SKILL_NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+SKILL_NAME_MAX_LENGTH = 64
+SKILL_DESCRIPTION_MAX_LENGTH = 1024
+STRICT_AGENT_SKILL_PROFILES = {
+    "agents-user",
+    "agents-project",
+    "copilot-user",
+    "copilot-project",
+}
 
 # ---------------------------------------------------------------------------
 # Config loading
@@ -554,6 +563,18 @@ def cmd_check(args) -> int:
     skills = discover_skills(hub_root)
     errors = 0
     for skill in skills:
+        skill_targets = expand_profile_list(skill.targets, groups)
+        strict_agent_skill_format = not skill_targets or bool(
+            STRICT_AGENT_SKILL_PROFILES.intersection(skill_targets)
+        )
+
+        def report_agent_skill_format(message: str) -> None:
+            nonlocal errors
+            level = "ERROR" if strict_agent_skill_format else "WARN"
+            print(f"{level} {skill.skill_id}/{fname}: {message}")
+            if strict_agent_skill_format:
+                errors += 1
+
         # variant files must exist + not have BOM (breaks frontmatter parsers)
         for variant, fname in skill.variants.items():
             p = skill.path / fname
@@ -581,6 +602,28 @@ def cmd_check(args) -> int:
                 if not isinstance(frontmatter.get(key), str) or not frontmatter.get(key).strip():
                     print(f"ERROR {skill.skill_id}/{fname}: frontmatter '{key}' must be a non-empty string")
                     errors += 1
+            name = frontmatter.get("name")
+            if isinstance(name, str) and name.strip():
+                if len(name) > SKILL_NAME_MAX_LENGTH:
+                    report_agent_skill_format(
+                        f"frontmatter 'name' exceeds {SKILL_NAME_MAX_LENGTH} characters"
+                    )
+                if not SKILL_NAME_RE.fullmatch(name):
+                    report_agent_skill_format(
+                        "frontmatter 'name' must use "
+                        "lowercase letters, numbers, and single hyphens"
+                    )
+                if name != skill.skill_id:
+                    report_agent_skill_format(
+                        "frontmatter 'name' must match "
+                        f"the skill directory ('{skill.skill_id}')"
+                    )
+            description = frontmatter.get("description")
+            if isinstance(description, str) and len(description) > SKILL_DESCRIPTION_MAX_LENGTH:
+                report_agent_skill_format(
+                    "frontmatter 'description' exceeds "
+                    f"{SKILL_DESCRIPTION_MAX_LENGTH} characters"
+                )
         # each declared target must reference a known profile or group
         for t in skill.targets:
             if t not in profiles and t not in groups:
